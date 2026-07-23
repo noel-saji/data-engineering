@@ -1,0 +1,58 @@
+name: Build and Push Yahoo Finance Image
+
+# Rebuild + push the container image whenever the app code or Dockerfile change.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "yahoo_finance/src/**"
+      - "yahoo_finance/Dockerfile"
+      - ".github/workflows/yahoo-finance-image.yml"
+  workflow_dispatch: {}
+
+# These must match the Terraform config:
+#   AWS_REGION      -> var.aws_region
+#   ECR_REPOSITORY  -> var.repo_name
+#   OIDC_ROLE_NAME  -> var.github_oidc_role_name
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: my-python-app
+  OIDC_ROLE_NAME: yahoo_terraform_github_oidc_role
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    # The OIDC trust policy is scoped to this environment. The AWS account ID
+    # is stored as the `AWS_ACCOUNT_ID` secret on the `main` environment.
+    environment: main
+
+    permissions:
+      id-token: write # required to request the OIDC token
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.OIDC_ROLE_NAME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -t "$REGISTRY/$ECR_REPOSITORY:latest" \
+            -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+            yahoo_finance
+          docker push "$REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"

@@ -5,7 +5,7 @@ resource "aws_sqs_queue" "dlq" {
 
 # 2. Create the EventBridge Schedule
 resource "aws_scheduler_schedule" "yahoo_schedule" {
-  name = "yahoo_terraform_scheduler"
+  name       = "yahoo_terraform_scheduler"
   group_name = "default"
 
   flexible_time_window {
@@ -16,7 +16,7 @@ resource "aws_scheduler_schedule" "yahoo_schedule" {
   schedule_expression = "rate(1 hour)"
 
   # Optional but recommended to ensure permissions are ready
-  depends_on = [aws_iam_role_policy.scheduler_batch_policy] 
+  depends_on = [aws_iam_role_policy.scheduler_batch_policy]
 
   target {
     arn      = "arn:aws:scheduler:::aws-sdk:batch:submitJob"
@@ -41,12 +41,12 @@ resource "aws_cloudwatch_event_rule" "batch_job_rule" {
   description = "Alerts only for the yahoo_terraform_job_definition"
 
   event_pattern = jsonencode({
-    "source": ["aws.batch"],
-    "detail-type": ["Batch Job State Change"],
-    "detail": {
+    "source" : ["aws.batch"],
+    "detail-type" : ["Batch Job State Change"],
+    "detail" : {
       # This ensures the rule ONLY applies to this specific job
-      "jobDefinition": [aws_batch_job_definition.python_app_job.arn],
-      "status": ["FAILED"]
+      "jobDefinition" : [aws_batch_job_definition.python_app_job.arn],
+      "status" : ["FAILED"]
     }
   })
 }

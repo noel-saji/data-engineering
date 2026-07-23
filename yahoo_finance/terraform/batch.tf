@@ -27,20 +27,20 @@ data "aws_security_group" "default" {
 
 # 2. Batch Compute Environment
 resource "aws_batch_compute_environment" "fargate_env" {
-  name     = "yahoo_terraform"
-  type     = "MANAGED"
-  state    = "ENABLED"
-  
+  name  = "yahoo_terraform"
+  type  = "MANAGED"
+  state = "ENABLED"
+
   # UPDATED: Added the policy attachment to the existing depends_on list
   depends_on = [aws_iam_role_policy_attachment.managed_attachments]
   # UPDATED: Points to the new Terraform-managed role
   service_role = aws_iam_role.batch_ecs_task_role.arn
 
   compute_resources {
-    type                = "FARGATE"
-    max_vcpus           = 4
-    subnets             = data.aws_subnets.default.ids
-    security_group_ids  = [data.aws_security_group.default.id]
+    type               = "FARGATE"
+    max_vcpus          = 4
+    subnets            = data.aws_subnets.default.ids
+    security_group_ids = [data.aws_security_group.default.id]
   }
 }
 
@@ -62,10 +62,10 @@ resource "aws_batch_job_definition" "python_app_job" {
   type = "container"
 
   platform_capabilities = ["FARGATE"]
-  
-  # UPDATED: Added the policy attachment to the existing depends_on list
+
+  # The image is now published by GitHub Actions, so we only depend on the
+  # IAM policy attachment being in place before the job definition is created.
   depends_on = [
-    null_resource.docker_push,
     aws_iam_role_policy_attachment.managed_attachments
   ]
 
@@ -75,7 +75,7 @@ resource "aws_batch_job_definition" "python_app_job" {
       { type = "VCPU", value = "2" },
       { type = "MEMORY", value = "4096" }
     ]
-    
+
     executionRoleArn = aws_iam_role.batch_ecs_task_role.arn
     jobRoleArn       = aws_iam_role.batch_ecs_task_role.arn
 
@@ -84,9 +84,9 @@ resource "aws_batch_job_definition" "python_app_job" {
     }
 
     environment = [
-      { name  = "S3_BUCKET", value = var.bucket_name }
+      { name = "S3_BUCKET", value = var.bucket_name }
     ]
-    
+
     fargatePlatformConfiguration = { platformVersion = "LATEST" }
     runtimePlatform = {
       operatingSystemFamily = "LINUX"

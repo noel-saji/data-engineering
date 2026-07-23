@@ -40,14 +40,20 @@ Before setting up the project, ensure you have the following installed and confi
 > The following steps must be completed in the [AWS Management Console](https://console.aws.amazon.com) before running the automation scripts.
 
 ### Environment Setup
-Create a `terraform.tfvars` file in the root directory and add the following:
+Create a `terraform.tfvars` file inside the `terraform/` directory and add the following:
 
 ```makefile
-aws_region = "ap-south-1"
-repo_name  = "your-repo-name"
+aws_region  = "ap-south-1"
+repo_name   = "your-repo-name"
 bucket_name = "your-bucket-name"
-email_name = "your.email@gmail.com"
+email_name  = "your.email@gmail.com"
+github_repo = "your-org/your-repo"   # repo allowed to assume the GitHub OIDC role
 ```
+
+> [!NOTE]
+> `aws_region`, `repo_name`, and `github_repo` must match the `env` block in
+> `.github/workflows/yahoo-finance-image.yml`, which builds and pushes the
+> container image (see section 4).
 
 ### IAM Configuration
 1.  **Create IAM User**: From your **Root Account**, create a new IAM user.
@@ -79,22 +85,59 @@ git clone https://github.com/noel-saji/aws-data-engineering-yahoo-finance.git
 
 ## 🛠 4. Infrastructure as Code (IaC)
 
-This project leverages **Terraform** to provision and manage cloud resources consistently. All configuration files are housed within the `/terraform` directory.
+This project leverages **Terraform** to provision and manage cloud resources consistently. All configuration files are housed within the `terraform/` directory.
 
 ### 📁 Directory Structure
 
 ```text
 terraform/
-├── main.tf            # S3, IAM, and Security definitions
-├── variables.tf       # Input variables
-├── providers.tf       # AWS provider configuration
-└── outputs.tf         # Key resource IDs (Bucket names, etc.)
+├── main.tf         # AWS provider + ECR repository
+├── iamrole.tf      # IAM roles: Batch/ECS task, EventBridge scheduler, GitHub OIDC
+├── batch.tf        # AWS Batch compute env, job queue & job definition
+├── eventbridge.tf  # Hourly schedule, event rule, SNS target
+├── glue.tf         # Glue catalog database, table & crawler
+├── sns.tf          # SNS topic, email subscription & policy
+├── variables.tf    # Input variables
+└── outputs.tf      # ECR URL + GitHub Actions role ARN
 ```
 
+### 🐳 Container Image (CI/CD)
+
+The Docker image is **not** built by Terraform. Terraform only provisions the
+**ECR repository**; the image is built and pushed by a **GitHub Actions**
+workflow (`.github/workflows/yahoo-finance-image.yml`) that authenticates to AWS
+using **OIDC** — no long-lived access keys are stored in GitHub.
+
+**How auth works:**
+* `iamrole.tf` registers GitHub's OIDC provider and creates an IAM role
+  (`yahoo_terraform_github_oidc_role`) whose trust policy is scoped to
+  `repo:<github_repo>:environment:main` and grants only ECR push permissions.
+* The workflow runs in the GitHub **`main` environment** and reconstructs the
+  role ARN from a single secret — your **AWS account ID**.
+
+**One-time GitHub setup** (after `terraform apply` has created the role):
+1. In the repo: **Settings → Environments → New environment → `main`**.
+2. Add an environment **secret** `AWS_ACCOUNT_ID` = your 12-digit AWS account ID.
+
+The workflow then runs automatically on any push to `main` that changes
+`yahoo_finance/src/**` or `yahoo_finance/Dockerfile`, pushing both `:latest` and
+a `:<git-sha>` tag. It can also be triggered manually via **Run workflow**.
+
+> [!IMPORTANT]
+> Only one OIDC provider for `token.actions.githubusercontent.com` can exist per
+> AWS account. If yours already has one, remove the
+> `aws_iam_openid_connect_provider.github` block from `iamrole.tf` and
+> `terraform import` the existing provider instead.
 
 ---
 
 ## 🚀 Deployment Workflow
+
+All Terraform commands are run from the `terraform/` directory:
+
+```bash
+cd terraform
+```
 
 ### 1️⃣ Initialize
 

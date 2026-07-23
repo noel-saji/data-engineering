@@ -7,7 +7,7 @@ resource "aws_glue_catalog_database" "my_database" {
 resource "aws_glue_catalog_table" "my_table" {
   name          = "transformed_data"
   database_name = aws_glue_catalog_database.my_database.name
-  
+
   # ⬇️ ADD THIS PARAMETER ⬇️
   parameters = {
     "UPDATED_BY_CRAWLER" = "yahoo-terraform-crawler" # Must match your crawler name exactly
@@ -31,7 +31,7 @@ resource "aws_glue_catalog_table" "my_table" {
     location      = "s3://yahoo-terraform/transformed/"
     input_format  = "org.apache.hadoop.mapred.TextInputFormat"
     output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
-    
+
     ser_de_info {
       serialization_library = "org.openx.data.jsonserde.JsonSerDe"
     }
